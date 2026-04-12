@@ -1,0 +1,7 @@
+{
+  "name": "Scanner Food",
+  "description": "Análise nutricional de alimentos a partir de imagens utilizando IA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

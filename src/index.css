@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --color-scan-primary: #00C853;
+  --color-scan-primary-hover: #00A040;
+  
+  --color-bg-base: var(--theme-bg);
+  --color-surface-base: var(--theme-surface);
+  --color-border-base: var(--theme-border);
+  --color-text-base: var(--theme-text);
+  
+  --color-invert-bg: var(--theme-invert-bg);
+  --color-invert-text: var(--theme-invert-text);
+  --color-overlay: var(--theme-overlay);
+  --color-toggle-bg: var(--theme-toggle-bg);
+  
+  --color-danger-bg: var(--theme-danger-bg);
+  --color-danger-text: var(--theme-danger-text);
+  
+  --color-warning-bg: var(--theme-warning-bg);
+  --color-warning-border: var(--theme-warning-border);
+  --color-warning-text: var(--theme-warning-text);
+  --color-warning-text-strong: var(--theme-warning-text-strong);
+}
+
+@layer base {
+  :root {
+    /* Dark mode (default) */
+    --theme-bg: #0B0B0B;
+    --theme-surface: #1A1A1A;
+    --theme-border: #333333;
+    --theme-text: #FFFFFF;
+    
+    --theme-invert-bg: #FFFFFF;
+    --theme-invert-text: #000000;
+    --theme-overlay: rgba(255, 255, 255, 0.05);
+    --theme-toggle-bg: #374151;
+    
+    --theme-danger-bg: rgba(127, 29, 29, 0.3);
+    --theme-danger-text: #fecaca;
+    
+    --theme-warning-bg: rgba(113, 63, 18, 0.2);
+    --theme-warning-border: rgba(161, 98, 7, 0.5);
+    --theme-warning-text: #eab308;
+    --theme-warning-text-strong: #facc15;
+    
+    --theme-image-opacity: 0.4;
+    --theme-text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 4px 20px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 0, 0, 0.9);
+  }
+
+  :root.light {
+    /* Light mode */
+    --theme-bg: #F5F5F5;
+    --theme-surface: #FFFFFF;
+    --theme-border: #E0E0E0;
+    --theme-text: #111111;
+    
+    --theme-invert-bg: #000000;
+    --theme-invert-text: #FFFFFF;
+    --theme-overlay: rgba(0, 0, 0, 0.05);
+    --theme-toggle-bg: #d1d5db;
+    
+    --theme-danger-bg: #fee2e2;
+    --theme-danger-text: #991b1b;
+    
+    --theme-warning-bg: #fef9c3;
+    --theme-warning-border: #fde047;
+    --theme-warning-text: #ca8a04;
+    --theme-warning-text-strong: #854d0e;
+    
+    --theme-image-opacity: 0.12;
+    --theme-text-shadow: 0 2px 10px rgba(255, 255, 255, 0.9), 0 4px 20px rgba(255, 255, 255, 0.8), 0 0 30px rgba(255, 255, 255, 0.9);
+  }
+
+  body {
+    @apply bg-bg-base text-text-base transition-colors duration-300;
+  }
+
+  .text-shadow-adaptive {
+    text-shadow: var(--theme-text-shadow);
+  }
+}
