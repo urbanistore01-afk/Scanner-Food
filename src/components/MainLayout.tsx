@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Home, Camera, MessageSquare, Settings as SettingsIcon } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -18,10 +19,10 @@ export default function MainLayout({ children, currentTab, onTabChange }: MainLa
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg-base text-text-base transition-colors duration-300">
+    <div className="min-h-screen flex flex-col bg-bg-base text-text-base transition-colors duration-300 overflow-x-hidden">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-bg-base/80 backdrop-blur-md border-b border-border-base">
-        <div className="flex items-center justify-between px-6 py-3 max-w-md mx-auto w-full">
+        <div className="flex items-center justify-between px-6 py-3 max-w-2xl mx-auto w-full">
           <div className="flex items-center gap-[2px]">
             <img 
               src="/logo.png" 
@@ -41,35 +42,37 @@ export default function MainLayout({ children, currentTab, onTabChange }: MainLa
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 w-full max-w-md mx-auto pb-24 relative">
-        {children}
+      {/* Main Content with Page Transitions */}
+      <main className="flex-1 w-full max-w-2xl mx-auto pb-28 relative">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentTab}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="h-full"
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
-      {/* Bottom Navbar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-surface-base border-t border-border-base pb-4">
-        <div className="flex justify-around items-center max-w-md mx-auto w-full px-6 py-3">
+      {/* Modern Bottom Navbar (Reels Style) */}
+      <nav className="fixed bottom-6 left-6 right-6 z-50 max-w-2xl mx-auto">
+        <div className="bg-black/90 backdrop-blur-xl border border-white/10 rounded-full px-8 py-3 flex justify-between items-center shadow-2xl">
           <NavItem 
             icon={<Home />} 
-            label="Home" 
             isActive={currentTab === 'home'} 
             onClick={() => onTabChange('home')} 
           />
-          <div className="relative -top-6">
-            <button
-              onClick={() => onTabChange('scanner')}
-              className={`p-4 rounded-full shadow-xl transition-transform ${
-                currentTab === 'scanner' 
-                  ? 'bg-invert-bg text-invert-text scale-110' 
-                  : 'bg-scan-primary text-white hover:bg-scan-primary-hover'
-              }`}
-            >
-              <Camera className="w-7 h-7" />
-            </button>
-          </div>
+          <NavItem 
+            icon={<Camera />} 
+            isActive={currentTab === 'scanner'} 
+            onClick={() => onTabChange('scanner')} 
+          />
           <NavItem 
             icon={<MessageSquare />} 
-            label="Chat" 
             isActive={currentTab === 'chat'} 
             onClick={() => onTabChange('chat')} 
           />
@@ -79,16 +82,29 @@ export default function MainLayout({ children, currentTab, onTabChange }: MainLa
   );
 }
 
-function NavItem({ icon, label, isActive, onClick }: { icon: React.ReactNode, label: string, isActive: boolean, onClick: () => void }) {
+function NavItem({ icon, isActive, onClick }: { icon: React.ReactNode, isActive: boolean, onClick: () => void }) {
   return (
-    <button 
+    <motion.button 
       onClick={onClick}
-      className={`flex flex-col items-center gap-1 p-2 transition-colors ${
-        isActive ? 'text-scan-primary' : 'text-text-base/50 hover:text-text-base'
+      whileTap={{ scale: 0.9 }}
+      animate={{ scale: isActive ? 1.15 : 1 }}
+      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      className={`relative flex flex-col items-center justify-center p-2 transition-colors duration-300 ${
+        isActive ? 'text-scan-primary' : 'text-gray-500 hover:text-gray-300'
       }`}
     >
-      {React.cloneElement(icon as React.ReactElement, { className: 'w-6 h-6' })}
-      <span className="text-xs font-medium">{label}</span>
-    </button>
+      {React.cloneElement(icon as React.ReactElement, { 
+        className: `w-7 h-7 transition-all duration-300 ${isActive ? 'drop-shadow-[0_0_10px_rgba(0,200,83,0.6)]' : ''}`,
+        strokeWidth: isActive ? 2.5 : 2
+      })}
+      
+      {/* Active Dot Indicator */}
+      {isActive && (
+        <motion.div 
+          layoutId="activeTab"
+          className="absolute -bottom-2 w-1.5 h-1.5 bg-scan-primary rounded-full shadow-[0_0_8px_rgba(0,200,83,1)]"
+        />
+      )}
+    </motion.button>
   );
 }

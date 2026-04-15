@@ -2,6 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Camera, Upload, X, CheckCircle2, AlertCircle, Activity, Flame, AlertTriangle, Info, RefreshCw, ShieldAlert, HeartPulse, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { analyzeFoodImage, FoodAnalysis } from '../lib/gemini';
+import { api } from '../lib/api';
+
+import { getUserPlan } from '../lib/subscription';
+import { supabase } from '../lib/supabase';
 
 interface ScannerProps {
   onScanComplete: (data: FoodAnalysis, image: string) => void;
@@ -15,6 +19,7 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
   const [result, setResult] = useState<FoodAnalysis | null>(initialData?.result || null);
   const [error, setError] = useState<string | null>(null);
   const [manualNameInput, setManualNameInput] = useState("");
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -178,6 +183,18 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
     setError(null);
     
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      
+      if (user) {
+        const plan = await getUserPlan(user.id);
+        if (plan !== "premium") {
+          setIsAnalyzing(false);
+          setShowPremiumModal(true);
+          return;
+        }
+      }
+
       const compressedImage = await compressImage(image);
       const match = compressedImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
       if (!match) throw new Error("Invalid image format");
@@ -188,6 +205,11 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
       const data = await analyzeFoodImage(base64Data, mimeType, typeof manualName === 'string' ? manualName : undefined);
       setResult(data);
       if (data.identificado_com_sucesso) {
+        try {
+          await api.saveScan(data, compressedImage);
+        } catch (apiError) {
+          console.error("Failed to save scan to backend:", apiError);
+        }
         onScanComplete(data, compressedImage);
       }
     } catch (err) {
@@ -212,7 +234,7 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
   };
 
   return (
-    <div className="p-6 flex flex-col h-full relative overflow-hidden">
+    <div className="p-4 sm:p-6 flex flex-col h-full relative overflow-hidden">
       {/* Background Image with Sophisticated Radial Mask */}
       <div 
         className="absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-700"
@@ -292,12 +314,12 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className="flex-1 flex flex-col items-center justify-center gap-6"
+            className="flex-1 flex flex-col items-center justify-center gap-8 w-full"
           >
-            <div className="w-64 h-64 border-2 border-dashed border-scan-primary rounded-3xl flex flex-col items-center justify-center bg-surface-base/50 p-6 text-center backdrop-blur-sm shadow-xl">
-              <Camera className="w-12 h-12 text-scan-primary mb-4 opacity-70 drop-shadow-md" />
-              <p className="font-medium mb-2 text-shadow-adaptive">Tire uma foto ou faça upload</p>
-              <p className="text-xs opacity-80 text-shadow-adaptive">Formatos suportados: JPG, PNG</p>
+            <div className="w-full max-w-xl aspect-square border-2 border-dashed border-scan-primary rounded-3xl flex flex-col items-center justify-center bg-surface-base/50 p-8 text-center backdrop-blur-sm shadow-xl">
+              <Camera className="w-16 h-16 text-scan-primary mb-6 opacity-70 drop-shadow-md" />
+              <p className="font-bold text-xl mb-2 text-shadow-adaptive">Tire uma foto ou faça upload</p>
+              <p className="text-sm opacity-80 text-shadow-adaptive">Formatos suportados: JPG, PNG</p>
             </div>
             
             <input 
@@ -316,7 +338,7 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
               onChange={handleImageUpload}
             />
             
-            <div className="flex flex-col gap-3 w-full max-w-xs">
+            <div className="flex flex-col gap-4 w-full max-w-xl">
               <button 
                 onClick={openCamera}
                 className="flex items-center gap-2 bg-scan-primary text-white px-8 py-4 rounded-full font-bold shadow-xl hover:bg-scan-primary-hover transition-colors justify-center"
@@ -334,11 +356,11 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
             </div>
           </motion.div>
         ) : (
-          <div className="flex-1 flex flex-col gap-6 pb-20">
+          <div className="flex-1 flex flex-col gap-6 pb-24">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="relative rounded-3xl overflow-hidden shadow-lg bg-black aspect-square max-h-[40vh] shrink-0 flex items-center justify-center"
+              className="relative rounded-3xl overflow-hidden shadow-lg bg-black aspect-square max-h-[60vh] shrink-0 flex items-center justify-center"
             >
               <img src={image} alt="Food to analyze" className="w-full h-full object-contain opacity-90" />
               
@@ -631,6 +653,64 @@ export default function Scanner({ onScanComplete, initialData }: ScannerProps) {
           </div>
         )}
       </div>
+
+      {/* Premium Modal */}
+      <AnimatePresence>
+        {showPremiumModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-base border border-border-base p-6 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-amber-600" />
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="absolute top-4 right-4 p-2 bg-bg-base rounded-full hover:bg-border-base transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              
+              <div className="w-12 h-12 bg-gradient-to-tr from-yellow-400 to-amber-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-amber-500/20">
+                <Flame className="w-6 h-6 text-white" />
+              </div>
+              
+              <h3 className="text-xl font-bold mb-2">Limite Gratuito Atingido</h3>
+              <p className="opacity-80 text-sm mb-6">
+                Você atingiu o limite de scans gratuitos. Assine o Premium para continuar analisando suas refeições e desbloquear recursos exclusivos!
+              </p>
+              
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-scan-primary" />
+                  <span>Scans ilimitados</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-scan-primary" />
+                  <span>Análises nutricionais completas</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-scan-primary" />
+                  <span>Veja substituições mais saudáveis</span>
+                </li>
+              </ul>
+              
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-3 bg-gradient-to-r from-scan-primary to-scan-primary-hover text-white rounded-xl font-bold shadow-lg shadow-scan-primary/20"
+              >
+                Entendi
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

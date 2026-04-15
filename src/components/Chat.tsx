@@ -1,39 +1,81 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, Flame, X, CheckCircle2 } from 'lucide-react';
 import { chatWithNutritionist, ChatMessage } from '../lib/gemini';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { api } from '../lib/api';
+import { getUserPlan } from '../lib/subscription';
+import { supabase } from '../lib/supabase';
 
 export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const savedHistory = localStorage.getItem('chatHistory');
-    if (savedHistory) {
+    const fetchChats = async () => {
       try {
-        setMessages(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error("Failed to parse chat history");
+        const data = await api.getChats();
+        if (data && data.length > 0) {
+          const formattedChats = data.map((item: any) => ({
+            role: item.role,
+            text: item.content
+          }));
+          setMessages(formattedChats);
+        } else {
+          setMessages([
+            { role: 'model', text: 'Olá! Sou seu assistente nutricional. Como posso ajudar você hoje com sua dieta ou dúvidas sobre alimentos?' }
+          ]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch chats from backend:", error);
+        // Fallback to local storage
+        const savedHistory = localStorage.getItem('chatHistory');
+        if (savedHistory) {
+          try {
+            setMessages(JSON.parse(savedHistory));
+          } catch (e) {
+            console.error("Failed to parse chat history");
+          }
+        } else {
+          setMessages([
+            { role: 'model', text: 'Olá! Sou seu assistente nutricional. Como posso ajudar você hoje com sua dieta ou dúvidas sobre alimentos?' }
+          ]);
+        }
+      } finally {
+        setIsFetching(false);
       }
-    } else {
-      // Initial greeting
-      setMessages([
-        { role: 'model', text: 'Olá! Sou seu assistente nutricional. Como posso ajudar você hoje com sua dieta ou dúvidas sobre alimentos?' }
-      ]);
-    }
+    };
+    
+    fetchChats();
   }, []);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && !isFetching) {
       localStorage.setItem('chatHistory', JSON.stringify(messages));
     }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isFetching]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+      
+      if (user) {
+        const plan = await getUserPlan(user.id);
+        if (plan !== "premium") {
+          setShowPremiumModal(true);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Error checking plan:", err);
+    }
 
     const userMsg = input.trim();
     setInput('');
@@ -43,8 +85,14 @@ export default function Chat() {
     setIsLoading(true);
 
     try {
+      // Save user message to backend
+      api.saveChat('user', userMsg).catch(console.error);
+
       const responseText = await chatWithNutritionist(newMessages, userMsg);
       setMessages([...newMessages, { role: 'model', text: responseText }]);
+      
+      // Save model message to backend
+      api.saveChat('model', responseText).catch(console.error);
     } catch (error) {
       setMessages([...newMessages, { role: 'model', text: 'Desculpe, ocorreu um erro. Tente novamente.' }]);
     } finally {
@@ -136,6 +184,60 @@ export default function Chat() {
           </button>
         </div>
       </div>
+
+      {/* Premium Modal */}
+      <AnimatePresence>
+        {showPremiumModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-surface-base border border-border-base p-6 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-amber-600" />
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="absolute top-4 right-4 p-2 bg-bg-base rounded-full hover:bg-border-base transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              
+              <div className="w-12 h-12 bg-gradient-to-tr from-yellow-400 to-amber-600 rounded-full flex items-center justify-center mb-4 shadow-lg shadow-amber-500/20">
+                <Flame className="w-6 h-6 text-white" />
+              </div>
+              
+              <h3 className="text-xl font-bold mb-2">Chat Ilimitado</h3>
+              <p className="opacity-80 text-sm mb-6">
+                O chat ilimitado com a Nutricionista IA é exclusivo do plano Premium. Assine agora para tirar todas as suas dúvidas!
+              </p>
+              
+              <ul className="space-y-3 mb-6">
+                <li className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-scan-primary" />
+                  <span>Chat ilimitado com IA</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-scan-primary" />
+                  <span>Dicas personalizadas</span>
+                </li>
+              </ul>
+              
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-3 bg-gradient-to-r from-scan-primary to-scan-primary-hover text-white rounded-xl font-bold shadow-lg shadow-scan-primary/20"
+              >
+                Entendi
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

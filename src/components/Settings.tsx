@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Moon, Sun, Bell, RotateCcw, Trash2, Info, FileText, Shield, ChevronRight, X } from 'lucide-react';
+import { Moon, Sun, Bell, RotateCcw, Trash2, Info, FileText, Shield, ChevronRight, X, Target, Flame } from 'lucide-react';
 import { requestNotificationPermission, NOTIFICATIONS_ENABLED_KEY } from '../lib/notifications';
+import { getGoals, getGoalsAsync, saveGoalsAsync, NutritionalGoals } from '../lib/goals';
+import { supabase } from '../lib/supabase';
 
 interface SettingsProps {
   onResetOnboarding: () => void;
@@ -12,7 +14,13 @@ export default function Settings({ onResetOnboarding }: SettingsProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [activeModal, setActiveModal] = useState<'about' | 'terms' | 'privacy' | null>(null);
+  const [activeModal, setActiveModal] = useState<'about' | 'terms' | 'privacy' | 'goals' | null>(null);
+  const [goals, setGoals] = useState<NutritionalGoals>(getGoals());
+  const [isActivatingPremium, setIsActivatingPremium] = useState(false);
+
+  useEffect(() => {
+    getGoalsAsync().then(setGoals);
+  }, []);
 
   useEffect(() => {
     setIsLightMode(document.documentElement.classList.contains('light'));
@@ -23,6 +31,38 @@ export default function Settings({ onResetOnboarding }: SettingsProps) {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const ativarPremium = async () => {
+    try {
+      setIsActivatingPremium(true);
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData.user;
+
+      if (!user) {
+        showToast("Você precisa estar logado para assinar o Premium.");
+        return;
+      }
+
+      const { error } = await supabase.from("subscriptions").upsert([
+        {
+          user_id: user.id,
+          plan: "premium",
+          status: "active"
+        }
+      ], { onConflict: 'user_id' });
+
+      if (error) throw error;
+
+      showToast("Premium ativado com sucesso! 🔥");
+      // Reload to apply premium status everywhere
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (error) {
+      console.error("Error activating premium:", error);
+      showToast("Erro ao ativar Premium. Tente novamente.");
+    } finally {
+      setIsActivatingPremium(false);
+    }
   };
 
   const toggleTheme = () => {
@@ -95,6 +135,60 @@ export default function Settings({ onResetOnboarding }: SettingsProps) {
             </p>
           </>
         );
+      case 'goals':
+        return (
+          <>
+            <h3 className="text-2xl font-bold mb-4">Metas Nutricionais</h3>
+            <div className="flex flex-col gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-80">Calorias (kcal)</label>
+                <input 
+                  type="number" 
+                  value={goals.calories} 
+                  onChange={(e) => setGoals({...goals, calories: Number(e.target.value)})}
+                  className="w-full bg-bg-base border border-border-base rounded-xl px-4 py-3 focus:outline-none focus:border-scan-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-80">Proteínas (g)</label>
+                <input 
+                  type="number" 
+                  value={goals.protein} 
+                  onChange={(e) => setGoals({...goals, protein: Number(e.target.value)})}
+                  className="w-full bg-bg-base border border-border-base rounded-xl px-4 py-3 focus:outline-none focus:border-scan-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-80">Carboidratos (g)</label>
+                <input 
+                  type="number" 
+                  value={goals.carbs} 
+                  onChange={(e) => setGoals({...goals, carbs: Number(e.target.value)})}
+                  className="w-full bg-bg-base border border-border-base rounded-xl px-4 py-3 focus:outline-none focus:border-scan-primary transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1 opacity-80">Gorduras (g)</label>
+                <input 
+                  type="number" 
+                  value={goals.fats} 
+                  onChange={(e) => setGoals({...goals, fats: Number(e.target.value)})}
+                  className="w-full bg-bg-base border border-border-base rounded-xl px-4 py-3 focus:outline-none focus:border-scan-primary transition-colors"
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  saveGoalsAsync(goals);
+                  setActiveModal(null);
+                  showToast("Metas salvas com sucesso!");
+                }}
+                className="w-full bg-scan-primary text-white font-bold py-3 rounded-xl mt-2 shadow-lg hover:bg-scan-primary-hover transition-colors"
+              >
+                Salvar Metas
+              </button>
+            </div>
+          </>
+        );
       default:
         return null;
     }
@@ -103,6 +197,32 @@ export default function Settings({ onResetOnboarding }: SettingsProps) {
   return (
     <div className="p-6 pb-24 flex flex-col gap-8 relative">
       <h2 className="text-3xl font-bold">Configurações</h2>
+
+      {/* Premium */}
+      <section>
+        <h3 className="text-xs font-bold text-amber-500 mb-3 uppercase tracking-widest">Assinatura</h3>
+        <div className="bg-gradient-to-br from-surface-base to-bg-base rounded-3xl overflow-hidden shadow-sm border border-amber-500/30 relative">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-amber-600" />
+          <div className="p-5 flex flex-col gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-tr from-yellow-400 to-amber-600 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Flame className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h4 className="font-bold text-lg">Scanner Food Premium</h4>
+                <p className="text-xs opacity-70">Desbloqueie análises completas 🔥</p>
+              </div>
+            </div>
+            <button 
+              onClick={ativarPremium}
+              disabled={isActivatingPremium}
+              className="w-full mt-2 py-3 bg-gradient-to-r from-scan-primary to-scan-primary-hover text-white rounded-xl font-bold shadow-lg shadow-scan-primary/20 disabled:opacity-50 transition-all hover:scale-[1.02]"
+            >
+              {isActivatingPremium ? 'Ativando...' : 'Assinar Premium'}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {/* Aparência */}
       <section>
@@ -126,6 +246,18 @@ export default function Settings({ onResetOnboarding }: SettingsProps) {
             label="Ativar notificações"
             isActive={notificationsEnabled}
             onClick={toggleNotifications}
+          />
+        </div>
+      </section>
+
+      {/* Metas Nutricionais */}
+      <section>
+        <h3 className="text-xs font-bold text-scan-primary mb-3 uppercase tracking-widest">Metas</h3>
+        <div className="bg-surface-base rounded-3xl overflow-hidden shadow-sm border border-border-base">
+          <SettingButton 
+            icon={<Target className="w-5 h-5" />}
+            label="Metas Nutricionais"
+            onClick={() => setActiveModal('goals')}
           />
         </div>
       </section>

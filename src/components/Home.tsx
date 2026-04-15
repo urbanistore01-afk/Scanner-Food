@@ -1,15 +1,47 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Camera, Activity, ChevronRight } from 'lucide-react';
+import { Camera, Activity, ChevronRight, Target } from 'lucide-react';
 import { FoodAnalysis } from '../lib/gemini';
+import { ScanHistoryItem } from './History';
+import { getGoals, getGoalsAsync, NutritionalGoals } from '../lib/goals';
 
 interface HomeProps {
   onScanClick: () => void;
   onHistoryClick: () => void;
   lastScan: FoodAnalysis | null;
+  scanHistory: ScanHistoryItem[];
+  userName?: string;
+  isPremium?: boolean;
 }
 
-export default function Home({ onScanClick, onHistoryClick, lastScan }: HomeProps) {
+export default function Home({ onScanClick, onHistoryClick, lastScan, scanHistory, userName, isPremium }: HomeProps) {
+  const [goals, setGoals] = useState<NutritionalGoals>(getGoals());
+  const [dailyIntake, setDailyIntake] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+
+  useEffect(() => {
+    getGoalsAsync().then(setGoals);
+  }, []);
+
+  useEffect(() => {
+    const today = new Date().toDateString();
+    let calories = 0, protein = 0, carbs = 0, fats = 0;
+
+    scanHistory.forEach(item => {
+      if (new Date(item.date).toDateString() === today && item.result.identificado_com_sucesso) {
+        calories += item.result.calorias || 0;
+        protein += item.result.proteinas || 0;
+        carbs += item.result.carboidratos || 0;
+        fats += item.result.gorduras || 0;
+      }
+    });
+
+    setDailyIntake({ calories, protein, carbs, fats });
+    setGoals(getGoals());
+  }, [scanHistory]);
+
+  const getProgress = (current: number, target: number) => {
+    return Math.min(100, Math.round((current / target) * 100)) || 0;
+  };
   return (
     <div className="p-6 flex flex-col gap-8 relative min-h-full overflow-hidden">
       {/* Background Image with Sophisticated Radial Mask */}
@@ -29,7 +61,14 @@ export default function Home({ onScanClick, onHistoryClick, lastScan }: HomeProp
 
       <div className="relative z-10 flex flex-col gap-8">
         <header className="pt-4">
-          <h2 className="font-bold mb-2 text-shadow-adaptive" style={{ fontSize: '36px' }}>Olá!</h2>
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="font-bold text-shadow-adaptive" style={{ fontSize: '36px' }}>Olá{userName ? `, ${userName}` : ''}!</h2>
+            {isPremium && (
+              <span className="bg-gradient-to-r from-yellow-400 to-amber-600 text-white text-[10px] uppercase font-bold px-2.5 py-1 rounded-full shadow-sm mt-2">
+                Premium
+              </span>
+            )}
+          </div>
           <p className="opacity-80 text-shadow-adaptive">Pronto para descobrir o que você vai comer hoje?</p>
         </header>
 
@@ -49,6 +88,26 @@ export default function Home({ onScanClick, onHistoryClick, lastScan }: HomeProp
               <Camera className="w-5 h-5" />
               Escanear Agora
             </button>
+          </div>
+        </motion.div>
+
+        {/* Nutritional Goals Progress */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="bg-surface-base p-5 rounded-3xl shadow-sm border border-border-base"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="w-5 h-5 text-scan-primary" />
+            <h3 className="text-lg font-bold">Metas Diárias</h3>
+          </div>
+          
+          <div className="flex flex-col gap-4">
+            <ProgressRow label="Calorias" current={dailyIntake.calories} target={goals.calories} unit="kcal" color="bg-scan-primary" />
+            <ProgressRow label="Proteínas" current={dailyIntake.protein} target={goals.protein} unit="g" color="bg-blue-500" />
+            <ProgressRow label="Carboidratos" current={dailyIntake.carbs} target={goals.carbs} unit="g" color="bg-orange-500" />
+            <ProgressRow label="Gorduras" current={dailyIntake.fats} target={goals.fats} unit="g" color="bg-yellow-500" />
           </div>
         </motion.div>
 
@@ -96,6 +155,27 @@ export default function Home({ onScanClick, onHistoryClick, lastScan }: HomeProp
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ProgressRow({ label, current, target, unit, color }: { label: string, current: number, target: number, unit: string, color: string }) {
+  const progress = Math.min(100, Math.round((current / target) * 100)) || 0;
+  
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-1">
+        <span className="font-medium">{label}</span>
+        <span className="opacity-70">{current} / {target} {unit}</span>
+      </div>
+      <div className="h-2 w-full bg-bg-base rounded-full overflow-hidden">
+        <motion.div 
+          initial={{ width: 0 }}
+          animate={{ width: `${progress}%` }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className={`h-full ${color} rounded-full`}
+        />
       </div>
     </div>
   );
