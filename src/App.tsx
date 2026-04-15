@@ -43,22 +43,27 @@ export default function App() {
       }
     };
 
-    // Check active session securely
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getUser();
-      const user = data.user;
-      
-      if (user) {
-        setIsAuthenticated(true);
-        const rawName = user.email?.split('@')[0].split('.')[0] || 'Usuário';
-        const capitalizedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-        setUserName(capitalizedName);
-        await fetchSubscription(user);
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setIsAuthenticated(true);
+          const rawName = session.user.email?.split('@')[0].split('.')[0] || 'Usuário';
+          const capitalizedName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+          setUserName(capitalizedName);
+          await fetchSubscription(session.user);
+        } else {
+          setIsAuthenticated(false);
+          setIsPremium(false);
+        }
+      } catch (error) {
+        console.error("Auth initialization error:", error);
+      } finally {
+        setIsInitializing(false);
       }
-      setIsInitializing(false);
     };
-    
-    checkAuth();
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
